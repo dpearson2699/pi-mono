@@ -30,7 +30,7 @@ import { AssistantMessageEventStream } from "../utils/event-stream.js";
 import { parseStreamingJson } from "../utils/json-parse.js";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
 import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.js";
-import { buildBaseOptions, clampReasoning } from "./simple-options.js";
+import { buildBaseOptions, clampReasoningForOpenAI } from "./simple-options.js";
 import { transformMessages } from "./transform-messages.js";
 
 /**
@@ -312,7 +312,7 @@ export const streamSimpleOpenAICompletions: StreamFunction<"openai-completions",
 	}
 
 	const base = buildBaseOptions(model, options, apiKey);
-	const reasoningEffort = supportsXhigh(model) ? options?.reasoning : clampReasoning(options?.reasoning);
+	const reasoningEffort = clampReasoningForOpenAI(options?.reasoning, supportsXhigh(model));
 	const toolChoice = (options as OpenAICompletionsOptions | undefined)?.toolChoice;
 
 	return streamOpenAICompletions(model, context, {

@@ -65,6 +65,33 @@ export function supportsXhigh<TApi extends Api>(model: Model<TApi>): boolean {
 }
 
 /**
+ * Check if a model uses Anthropic's adaptive thinking API.
+ * These models use effort levels (low/medium/high/max) instead of token budgets.
+ *
+ * Supported today:
+ * - Opus 4.6 (supports all levels including "max")
+ * - Sonnet 4.6 (supports low/medium/high, not "max")
+ */
+export function supportsAdaptiveThinking<TApi extends Api>(model: Model<TApi>): boolean {
+	if (model.api !== "anthropic-messages") return false;
+	return (
+		model.id.includes("opus-4-6") ||
+		model.id.includes("opus-4.6") ||
+		model.id.includes("sonnet-4-6") ||
+		model.id.includes("sonnet-4.6")
+	);
+}
+
+/**
+ * Check if a model supports the "max" effort level (Anthropic adaptive thinking).
+ * Currently only Opus 4.6 supports "max".
+ */
+export function supportsMaxEffort<TApi extends Api>(model: Model<TApi>): boolean {
+	if (model.api !== "anthropic-messages") return false;
+	return model.id.includes("opus-4-6") || model.id.includes("opus-4.6");
+}
+
+/**
  * Check if two models are equal by comparing both their id and provider.
  * Returns false if either model is null or undefined.
  */

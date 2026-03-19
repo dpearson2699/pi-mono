@@ -5,7 +5,7 @@
  * createAgentSession() options. The SDK does the heavy lifting.
  */
 
-import { type ImageContent, modelsAreEqual, supportsXhigh } from "@mariozechner/pi-ai";
+import { type ImageContent, modelsAreEqual } from "@mariozechner/pi-ai";
 import chalk from "chalk";
 import { createInterface } from "readline";
 import { type Args, parseArgs, printHelp } from "./cli/args.js";
@@ -823,8 +823,21 @@ export async function main(args: string[]) {
 		let effectiveThinking = session.thinkingLevel;
 		if (!session.model.reasoning) {
 			effectiveThinking = "off";
-		} else if (effectiveThinking === "xhigh" && !supportsXhigh(session.model)) {
-			effectiveThinking = "high";
+		} else {
+			// Clamp to available levels for the current model
+			const available = session.getAvailableThinkingLevels();
+			if (!available.includes(effectiveThinking)) {
+				// Cross-provider: xhigh → max, max → xhigh, etc.
+				if (effectiveThinking === "xhigh" && available.includes("max")) {
+					effectiveThinking = "max";
+				} else if (effectiveThinking === "max" && available.includes("xhigh")) {
+					effectiveThinking = "xhigh";
+				} else if (effectiveThinking === "xhigh" || effectiveThinking === "max") {
+					effectiveThinking = "high";
+				} else {
+					effectiveThinking = "high";
+				}
+			}
 		}
 		if (effectiveThinking !== session.thinkingLevel) {
 			session.setThinkingLevel(effectiveThinking);

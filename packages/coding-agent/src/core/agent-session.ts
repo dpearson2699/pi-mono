@@ -24,7 +24,14 @@ import type {
 	ThinkingLevel,
 } from "@mariozechner/pi-agent-core";
 import type { AssistantMessage, ImageContent, Message, Model, TextContent } from "@mariozechner/pi-ai";
-import { isContextOverflow, modelsAreEqual, resetApiProviders, supportsXhigh } from "@mariozechner/pi-ai";
+import {
+	isContextOverflow,
+	modelsAreEqual,
+	resetApiProviders,
+	supportsAdaptiveThinking,
+	supportsMaxEffort,
+	supportsXhigh,
+} from "@mariozechner/pi-ai";
 import { getDocsPath } from "../config.js";
 import { theme } from "../modes/interactive/theme/theme.js";
 import { stripFrontmatter } from "../utils/frontmatter.js";
@@ -199,11 +206,17 @@ export interface SessionStats {
 // Constants
 // ============================================================================
 
-/** Standard thinking levels */
+/** Standard thinking levels (OpenAI-style) */
 const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high"];
 
-/** Thinking levels including xhigh (for supported models) */
+/** Thinking levels including xhigh (for supported OpenAI models) */
 const THINKING_LEVELS_WITH_XHIGH: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
+
+/** Anthropic adaptive thinking levels (Sonnet 4.6) */
+const ANTHROPIC_ADAPTIVE_LEVELS: ThinkingLevel[] = ["off", "auto", "low", "medium", "high"];
+
+/** Anthropic adaptive thinking levels including max (Opus 4.6) */
+const ANTHROPIC_ADAPTIVE_LEVELS_WITH_MAX: ThinkingLevel[] = ["off", "auto", "low", "medium", "high", "max"];
 
 // ============================================================================
 // AgentSession Class
@@ -1524,10 +1537,17 @@ export class AgentSession {
 
 	/**
 	 * Get available thinking levels for current model.
-	 * The provider will clamp to what the specific model supports internally.
+	 * Returns provider-appropriate levels:
+	 * - Anthropic adaptive thinking (Opus 4.6): off/auto/low/medium/high/max
+	 * - Anthropic adaptive thinking (Sonnet 4.6): off/auto/low/medium/high
+	 * - OpenAI with xhigh support: off/minimal/low/medium/high/xhigh
+	 * - Standard: off/minimal/low/medium/high
 	 */
 	getAvailableThinkingLevels(): ThinkingLevel[] {
 		if (!this.supportsThinking()) return ["off"];
+		if (this.model && supportsAdaptiveThinking(this.model)) {
+			return supportsMaxEffort(this.model) ? ANTHROPIC_ADAPTIVE_LEVELS_WITH_MAX : ANTHROPIC_ADAPTIVE_LEVELS;
+		}
 		return this.supportsXhighThinking() ? THINKING_LEVELS_WITH_XHIGH : THINKING_LEVELS;
 	}
 
@@ -1556,20 +1576,35 @@ export class AgentSession {
 	}
 
 	private _clampThinkingLevel(level: ThinkingLevel, availableLevels: ThinkingLevel[]): ThinkingLevel {
-		const ordered = THINKING_LEVELS_WITH_XHIGH;
 		const available = new Set(availableLevels);
-		const requestedIndex = ordered.indexOf(level);
-		if (requestedIndex === -1) {
-			return availableLevels[0] ?? "off";
+
+		// Direct match — level is available
+		if (available.has(level)) return level;
+
+		// Cross-provider mapping: translate between equivalent levels
+		const equivalents: Record<string, ThinkingLevel[]> = {
+			xhigh: ["max", "high"],
+			max: ["xhigh", "high"],
+			minimal: ["low"],
+			auto: ["high"],
+		};
+		for (const equiv of equivalents[level] ?? []) {
+			if (available.has(equiv)) return equiv;
 		}
-		for (let i = requestedIndex; i < ordered.length; i++) {
-			const candidate = ordered[i];
-			if (available.has(candidate)) return candidate;
+
+		// Fall back to the ordered available list: find closest by intensity
+		const intensityOrder: ThinkingLevel[] = ["off", "auto", "minimal", "low", "medium", "high", "xhigh", "max"];
+		const requestedIndex = intensityOrder.indexOf(level);
+		if (requestedIndex !== -1) {
+			// Search forward then backward for nearest available
+			for (let i = requestedIndex; i < intensityOrder.length; i++) {
+				if (available.has(intensityOrder[i])) return intensityOrder[i];
+			}
+			for (let i = requestedIndex - 1; i >= 0; i--) {
+				if (available.has(intensityOrder[i])) return intensityOrder[i];
+			}
 		}
-		for (let i = requestedIndex - 1; i >= 0; i--) {
-			const candidate = ordered[i];
-			if (available.has(candidate)) return candidate;
-		}
+
 		return availableLevels[0] ?? "off";
 	}
 

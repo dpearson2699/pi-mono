@@ -397,8 +397,10 @@ function supportsAdaptiveThinking(modelId: string): boolean {
 function mapThinkingLevelToEffort(
 	level: SimpleStreamOptions["reasoning"],
 	modelId: string,
-): "low" | "medium" | "high" | "max" {
+): "low" | "medium" | "high" | "max" | undefined {
 	switch (level) {
+		case "auto":
+			return undefined;
 		case "minimal":
 		case "low":
 			return "low";
@@ -406,6 +408,8 @@ function mapThinkingLevelToEffort(
 			return "medium";
 		case "high":
 			return "high";
+		case "max":
+			return modelId.includes("opus-4-6") || modelId.includes("opus-4.6") ? "max" : "high";
 		case "xhigh":
 			return modelId.includes("opus-4-6") || modelId.includes("opus-4.6") ? "max" : "high";
 		default:
@@ -704,23 +708,33 @@ function buildAdditionalModelRequestFields(
 	}
 
 	if (model.id.includes("anthropic.claude") || model.id.includes("anthropic/claude")) {
+		const effort = mapThinkingLevelToEffort(options.reasoning, model.id);
 		const result: Record<string, any> = supportsAdaptiveThinking(model.id)
 			? {
 					thinking: { type: "adaptive" },
-					output_config: { effort: mapThinkingLevelToEffort(options.reasoning, model.id) },
+					...(effort ? { output_config: { effort } } : {}),
 				}
 			: (() => {
-					const defaultBudgets: Record<ThinkingLevel, number> = {
+					const defaultBudgets: Record<string, number> = {
 						minimal: 1024,
 						low: 2048,
 						medium: 8192,
 						high: 16384,
-						xhigh: 16384, // Claude doesn't support xhigh, clamp to high
+						xhigh: 16384,
+						max: 16384,
+						auto: 8192,
 					};
 
-					// Custom budgets override defaults (xhigh not in ThinkingBudgets, use high)
-					const level = options.reasoning === "xhigh" ? "high" : options.reasoning;
-					const budget = options.thinkingBudgets?.[level] ?? defaultBudgets[options.reasoning];
+					// Custom budgets override defaults (xhigh/max/auto not in ThinkingBudgets, use closest)
+					const budgetLevel =
+						options.reasoning === "xhigh" || options.reasoning === "max"
+							? "high"
+							: options.reasoning === "auto"
+								? "high"
+								: options.reasoning;
+					const budget =
+						options.thinkingBudgets?.[budgetLevel as keyof typeof options.thinkingBudgets] ??
+						defaultBudgets[options.reasoning];
 
 					return {
 						thinking: {

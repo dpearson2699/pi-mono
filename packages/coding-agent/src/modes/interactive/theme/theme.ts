@@ -72,13 +72,15 @@ const ThemeJsonSchema = Type.Object({
 		syntaxType: ColorValueSchema,
 		syntaxOperator: ColorValueSchema,
 		syntaxPunctuation: ColorValueSchema,
-		// Thinking Level Borders (6 colors)
+		// Thinking Level Borders (8 colors)
 		thinkingOff: ColorValueSchema,
 		thinkingMinimal: ColorValueSchema,
 		thinkingLow: ColorValueSchema,
 		thinkingMedium: ColorValueSchema,
 		thinkingHigh: ColorValueSchema,
 		thinkingXhigh: ColorValueSchema,
+		thinkingMax: Type.Optional(ColorValueSchema),
+		thinkingAuto: Type.Optional(ColorValueSchema),
 		// Bash Mode (1 color)
 		bashMode: ColorValueSchema,
 	}),
@@ -140,6 +142,8 @@ export type ThemeColor =
 	| "thinkingMedium"
 	| "thinkingHigh"
 	| "thinkingXhigh"
+	| "thinkingMax"
+	| "thinkingAuto"
 	| "bashMode";
 
 export type ThemeBg =
@@ -412,7 +416,9 @@ export class Theme {
 		return this.mode;
 	}
 
-	getThinkingBorderColor(level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh"): (str: string) => string {
+	getThinkingBorderColor(
+		level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "auto",
+	): (str: string) => string {
 		// Map thinking levels to dedicated theme colors
 		switch (level) {
 			case "off":
@@ -427,6 +433,10 @@ export class Theme {
 				return (str: string) => this.fg("thinkingHigh", str);
 			case "xhigh":
 				return (str: string) => this.fg("thinkingXhigh", str);
+			case "max":
+				return (str: string) => this.fg("thinkingMax", str);
+			case "auto":
+				return (str: string) => this.fg("thinkingAuto", str);
 			default:
 				return (str: string) => this.fg("thinkingOff", str);
 		}
@@ -594,6 +604,11 @@ function createTheme(themeJson: ThemeJson, mode?: ColorMode, sourcePath?: string
 			fgColors[key as ThemeColor] = value;
 		}
 	}
+
+	// Fallback for new thinking level colors: reuse existing colors when not defined
+	if (!fgColors.thinkingMax) fgColors.thinkingMax = fgColors.thinkingXhigh;
+	if (!fgColors.thinkingAuto) fgColors.thinkingAuto = fgColors.thinkingHigh;
+
 	return new Theme(fgColors, bgColors, colorMode, {
 		name: themeJson.name,
 		sourcePath,

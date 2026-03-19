@@ -30,6 +30,7 @@ export class MessageEditor extends LitElement {
 	@property() isStreaming = false;
 	@property() currentModel?: Model<any>;
 	@property() thinkingLevel: ThinkingLevel = "off";
+	@property() availableThinkingLevels: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high"];
 	@property() showAttachmentButton = true;
 	@property() showModelSelector = true;
 	@property() showThinkingSelector = true;
@@ -37,7 +38,7 @@ export class MessageEditor extends LitElement {
 	@property() onSend?: (input: string, attachments: Attachment[]) => void;
 	@property() onAbort?: () => void;
 	@property() onModelSelect?: () => void;
-	@property() onThinkingChange?: (level: "off" | "minimal" | "low" | "medium" | "high") => void;
+	@property() onThinkingChange?: (level: ThinkingLevel) => void;
 	@property() onFilesChange?: (files: Attachment[]) => void;
 	@property() attachments: Attachment[] = [];
 	@property() maxFiles = 10;
@@ -325,15 +326,13 @@ export class MessageEditor extends LitElement {
 									${Select({
 										value: this.thinkingLevel,
 										placeholder: i18n("Off"),
-										options: [
-											{ value: "off", label: i18n("Off"), icon: icon(Brain, "sm") },
-											{ value: "minimal", label: i18n("Minimal"), icon: icon(Brain, "sm") },
-											{ value: "low", label: i18n("Low"), icon: icon(Brain, "sm") },
-											{ value: "medium", label: i18n("Medium"), icon: icon(Brain, "sm") },
-											{ value: "high", label: i18n("High"), icon: icon(Brain, "sm") },
-										] as SelectOption[],
+										options: this.availableThinkingLevels.map((level) => ({
+											value: level,
+											label: i18n(level.charAt(0).toUpperCase() + level.slice(1)),
+											icon: icon(Brain, "sm"),
+										})) as SelectOption[],
 										onChange: (value: string) => {
-											const level = value as "off" | "minimal" | "low" | "medium" | "high";
+											const level = value as ThinkingLevel;
 											this.thinkingLevel = level;
 											this.onThinkingChange?.(level);
 										},

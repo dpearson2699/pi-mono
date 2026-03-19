@@ -455,10 +455,18 @@ function supportsAdaptiveThinking(modelId: string): boolean {
 
 /**
  * Map ThinkingLevel to Anthropic effort levels for adaptive thinking.
+ * Anthropic-native levels (low/medium/high/max) pass through directly.
+ * Legacy pi-ai levels (minimal/xhigh) are mapped to their closest equivalent.
+ * "auto" returns undefined (omit effort parameter, let model decide).
  * Note: effort "max" is only valid on Opus 4.6.
  */
-function mapThinkingLevelToEffort(level: SimpleStreamOptions["reasoning"], modelId: string): AnthropicEffort {
+function mapThinkingLevelToEffort(
+	level: SimpleStreamOptions["reasoning"],
+	modelId: string,
+): AnthropicEffort | undefined {
 	switch (level) {
+		case "auto":
+			return undefined;
 		case "minimal":
 			return "low";
 		case "low":
@@ -467,6 +475,8 @@ function mapThinkingLevelToEffort(level: SimpleStreamOptions["reasoning"], model
 			return "medium";
 		case "high":
 			return "high";
+		case "max":
+			return modelId.includes("opus-4-6") || modelId.includes("opus-4.6") ? "max" : "high";
 		case "xhigh":
 			return modelId.includes("opus-4-6") || modelId.includes("opus-4.6") ? "max" : "high";
 		default:

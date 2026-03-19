@@ -944,7 +944,7 @@ export function buildRequest(
 	};
 }
 
-type ClampedThinkingLevel = Exclude<ThinkingLevel, "xhigh">;
+type ClampedThinkingLevel = Exclude<ThinkingLevel, "xhigh" | "max" | "auto">;
 
 function getGeminiCliThinkingLevel(effort: ClampedThinkingLevel, modelId: string): GoogleThinkingLevel {
 	if (isGemini3ProModel(modelId)) {

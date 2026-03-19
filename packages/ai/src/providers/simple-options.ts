@@ -15,8 +15,31 @@ export function buildBaseOptions(model: Model<Api>, options?: SimpleStreamOption
 	};
 }
 
-export function clampReasoning(effort: ThinkingLevel | undefined): Exclude<ThinkingLevel, "xhigh"> | undefined {
-	return effort === "xhigh" ? "high" : effort;
+/**
+ * Clamp ThinkingLevel to levels supported by most providers (excludes xhigh, max, auto).
+ * Used by Google, Bedrock, and other providers that only support minimal/low/medium/high.
+ */
+export function clampReasoning(
+	effort: ThinkingLevel | undefined,
+): Exclude<ThinkingLevel, "xhigh" | "max" | "auto"> | undefined {
+	if (effort === "xhigh" || effort === "max") return "high";
+	if (effort === "auto") return "high";
+	return effort;
+}
+
+/**
+ * Clamp ThinkingLevel for OpenAI providers (supports xhigh but not max/auto).
+ * For models supporting xhigh, passes minimal/low/medium/high/xhigh through.
+ * Anthropic-specific levels (max, auto) are mapped to their closest equivalents.
+ */
+export function clampReasoningForOpenAI(
+	effort: ThinkingLevel | undefined,
+	modelSupportsXhigh: boolean,
+): Exclude<ThinkingLevel, "max" | "auto"> | undefined {
+	if (effort === "max") return modelSupportsXhigh ? "xhigh" : "high";
+	if (effort === "auto") return "high";
+	if (effort === "xhigh" && !modelSupportsXhigh) return "high";
+	return effort;
 }
 
 export function adjustMaxTokensForThinking(

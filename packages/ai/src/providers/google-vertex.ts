@@ -454,7 +454,7 @@ function buildParams(
 	return params;
 }
 
-type ClampedThinkingLevel = Exclude<PiThinkingLevel, "xhigh">;
+type ClampedThinkingLevel = Exclude<PiThinkingLevel, "xhigh" | "max" | "auto">;
 
 function isGemini3ProModel(model: Model<"google-generative-ai">): boolean {
 	return /gemini-3(?:\.\d+)?-pro/.test(model.id.toLowerCase());
