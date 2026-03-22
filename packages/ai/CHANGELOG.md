@@ -11,6 +11,7 @@
 
 - Fixed OpenAI Responses replay for foreign tool-call item IDs by hashing foreign `function_call.id` values into bounded `fc_<hash>` IDs instead of preserving backend-specific normalized shapes that OpenAI Codex rejects.
 - Fixed Anthropic thinking disable handling to send `thinking: { type: "disabled" }` for reasoning-capable models when thinking is explicitly off, and added payload and env-gated end-to-end coverage for the Anthropic provider ([#2022](https://github.com/badlogic/pi-mono/issues/2022))
+- Fixed GitHub Copilot context window limits: removed incorrect 1M override for Claude 4.6 models and added runtime fetch of actual model limits from the Copilot `/models` API after OAuth login, replacing stale models.dev defaults that undercount context windows (e.g., claude-opus-4.6 reported as 144K instead of 200K)
 
 ## [0.61.1] - 2026-03-20
 

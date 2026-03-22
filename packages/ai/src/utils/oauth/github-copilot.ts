@@ -8,6 +8,8 @@ import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } fr
 
 type CopilotCredentials = OAuthCredentials & {
 	enterpriseUrl?: string;
+	/** Model limits from the /models API, keyed by model ID */
+	modelLimits?: Record<string, { contextWindow: number; maxTokens: number }>;
 };
 
 const decode = (s: string) => atob(s);
@@ -317,6 +319,50 @@ async function enableAllGitHubCopilotModels(
 }
 
 /**
+ * Fetch model limits (contextWindow, maxTokens) from the Copilot /models API.
+ * Returns a map of model ID to limits, or empty object on failure.
+ */
+async function fetchCopilotModelLimits(
+	token: string,
+	enterpriseDomain?: string,
+): Promise<Record<string, { contextWindow: number; maxTokens: number }>> {
+	const baseUrl = getGitHubCopilotBaseUrl(token, enterpriseDomain);
+	try {
+		const response = await fetch(`${baseUrl}/models`, {
+			headers: {
+				Accept: "application/json",
+				Authorization: `Bearer ${token}`,
+				"X-GitHub-Api-Version": "2025-05-01",
+				...COPILOT_HEADERS,
+			},
+		});
+		if (!response.ok) return {};
+		const data = (await response.json()) as {
+			data?: Array<{
+				id: string;
+				capabilities?: {
+					limits?: {
+						max_context_window_tokens?: number;
+						max_output_tokens?: number;
+					};
+				};
+			}>;
+		};
+		const limits: Record<string, { contextWindow: number; maxTokens: number }> = {};
+		for (const m of data.data || []) {
+			const ctx = m.capabilities?.limits?.max_context_window_tokens;
+			const out = m.capabilities?.limits?.max_output_tokens;
+			if (ctx && out) {
+				limits[m.id] = { contextWindow: ctx, maxTokens: out };
+			}
+		}
+		return limits;
+	} catch {
+		return {};
+	}
+}
+
+/**
  * Login with GitHub Copilot OAuth (device code flow)
  *
  * @param options.onAuth - Callback with URL and optional instructions (user code)
@@ -362,6 +408,14 @@ export async function loginGitHubCopilot(options: {
 	// Enable all models after successful login
 	options.onProgress?.("Enabling models...");
 	await enableAllGitHubCopilotModels(credentials.access, enterpriseDomain ?? undefined);
+
+	// Fetch actual model limits from the /models API
+	options.onProgress?.("Fetching model limits...");
+	const modelLimits = await fetchCopilotModelLimits(credentials.access, enterpriseDomain ?? undefined);
+	if (Object.keys(modelLimits).length > 0) {
+		(credentials as CopilotCredentials).modelLimits = modelLimits;
+	}
+
 	return credentials;
 }
 
@@ -380,7 +434,13 @@ export const githubCopilotOAuthProvider: OAuthProviderInterface = {
 
 	async refreshToken(credentials: OAuthCredentials): Promise<OAuthCredentials> {
 		const creds = credentials as CopilotCredentials;
-		return refreshGitHubCopilotToken(creds.refresh, creds.enterpriseUrl);
+		const refreshed = await refreshGitHubCopilotToken(creds.refresh, creds.enterpriseUrl);
+		// Refresh model limits from the /models API
+		const modelLimits = await fetchCopilotModelLimits(refreshed.access, creds.enterpriseUrl);
+		if (Object.keys(modelLimits).length > 0) {
+			(refreshed as CopilotCredentials).modelLimits = modelLimits;
+		}
+		return refreshed;
 	},
 
 	getApiKey(credentials: OAuthCredentials): string {
@@ -391,6 +451,18 @@ export const githubCopilotOAuthProvider: OAuthProviderInterface = {
 		const creds = credentials as CopilotCredentials;
 		const domain = creds.enterpriseUrl ? (normalizeDomain(creds.enterpriseUrl) ?? undefined) : undefined;
 		const baseUrl = getGitHubCopilotBaseUrl(creds.access, domain);
-		return models.map((m) => (m.provider === "github-copilot" ? { ...m, baseUrl } : m));
+		const limits = creds.modelLimits;
+		return models.map((m) => {
+			if (m.provider !== "github-copilot") return m;
+			const modelLimits = limits?.[m.id];
+			return {
+				...m,
+				baseUrl,
+				...(modelLimits && {
+					contextWindow: modelLimits.contextWindow,
+					maxTokens: modelLimits.maxTokens,
+				}),
+			};
+		});
 	},
 };
